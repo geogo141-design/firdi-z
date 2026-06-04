@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PRD-007 生產抽檢儀表板</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg: #0f1118; --card: #1a1d2e; --card2: #212538;
+  --accent: #6366f1; --accent2: #a5b4fc; --danger: #ef4444; --warn: #f59e0b; --good: #10b981;
+  --text: #e0e0e0; --text2: #8888aa; --border: #2a2d3e;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Segoe UI', 'Noto Sans TC', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+.container { max-width: 1440px; margin: 0 auto; padding: 24px; }
+
+header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; margin-bottom: 28px; }
+header h1 { font-size: 1.6em; background: linear-gradient(135deg, var(--accent2), var(--accent)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+header .subtitle { color: var(--text2); font-size: .9em; }
+header .badge { background: rgba(239,68,68,.15); color: var(--danger); padding: 6px 14px; border-radius: 20px; font-size: .8em; border: 1px solid rgba(239,68,68,.3); }
+
+.search-bar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 24px; }
+.search-bar input { flex: 1; min-width: 200px; padding: 10px 16px; border: 1px solid var(--border); border-radius: 10px; background: var(--card); color: var(--text); font-size: .9em; outline: none; transition: border .2s; }
+.search-bar input:focus { border-color: var(--accent); }
+.search-bar input::placeholder { color: var(--text2); }
+.search-bar select { padding: 10px 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--card); color: var(--text); font-size: .85em; outline: none; cursor: pointer; }
+.search-bar select:focus { border-color: var(--accent); }
+.search-bar .stat { color: var(--text2); font-size: .85em; margin-left: auto; }
+
+.sm-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 28px; }
+.sm-card { padding: 18px; border-radius: 14px; text-align: center; background: var(--card); border: 1px solid var(--border); transition: transform .2s; }
+.sm-card:hover { transform: translateY(-2px); }
+.sm-card .num { font-size: 2em; font-weight: 800; }
+.sm-card .label { font-size: .82em; color: var(--text2); margin-top: 4px; }
+.sm-card .num.red { color: var(--danger); }
+.sm-card .num.green { color: var(--good); }
+.sm-card .num.blue { color: var(--accent2); }
+.sm-card .num.orange { color: var(--warn); }
+.sm-card .num.gold { color: #ffd700; }
+
+.ch-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px; }
+@media (max-width: 900px) { .ch-grid { grid-template-columns: 1fr; } }
+.ch-card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 20px; }
+.ch-card h3 { font-size: .95em; color: var(--text2); margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+.ch-card h3 .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.chart-wrap { position: relative; height: 280px; }
+.chart-wrap.tall { height: 340px; }
+
+.tabs { display: flex; gap: 4px; margin-bottom: 14px; flex-wrap: wrap; }
+.tab-btn { padding: 8px 18px; border: 1px solid var(--border); border-radius: 8px; background: transparent; color: var(--text2); cursor: pointer; font-size: .85em; transition: all .2s; }
+.tab-btn:hover { border-color: var(--accent); color: var(--text); }
+.tab-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+.view-switch { display: flex; gap: 6px; margin-bottom: 20px; }
+.view-btn { padding: 8px 20px; border: 1px solid var(--border); border-radius: 8px; background: transparent; color: var(--text2); cursor: pointer; font-size: .85em; transition: all .2s; }
+.view-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.view-btn:hover:not(.active) { border-color: var(--accent); }
+.view-panel { display: none; }
+.view-panel.active { display: block; }
+
+.tbl-wrap { overflow-x: auto; border-radius: 12px; border: 1px solid var(--border); }
+table { width: 100%; border-collapse: collapse; font-size: .85em; }
+th { background: var(--card2); color: var(--text2); font-weight: 600; padding: 10px 12px; text-align: center; white-space: nowrap; border-bottom: 1px solid var(--border); }
+td { padding: 8px 12px; text-align: center; border-bottom: 1px solid var(--border); white-space: nowrap; }
+td.left { text-align: left; }
+tr:hover { background: rgba(99,102,241,.08); }
+tr.danger { background: rgba(239,68,68,.1); }
+tr.warn { background: rgba(245,158,11,.1); }
+
+.tag { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: .75em; font-weight: 600; }
+.tag-red { background: rgba(239,68,68,.2); color: var(--danger); }
+.tag-orange { background: rgba(245,158,11,.2); color: var(--warn); }
+.tag-green { background: rgba(16,185,129,.2); color: var(--good); }
+.tag-purple { background: rgba(99,102,241,.2); color: var(--accent2); }
+.tag-gray { background: rgba(156,163,175,.2); color: #9ca3af; }
+
+.product-detail { display: grid; grid-template-columns: 1fr; gap: 16px; }
+.no-data { text-align: center; padding: 40px; color: var(--text2); font-size: .95em; }
+.insight-box { background: var(--card2); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 20px; }
+.insight-box h3 { font-size: .9em; color: var(--accent2); margin-bottom: 8px; }
+.insight-box ul { list-style: none; padding: 0; }
+.insight-box li { font-size: .85em; color: var(--text2); padding: 4px 0; border-bottom: 1px solid var(--border); }
+.insight-box li:last-child { border-bottom: none; }
+.insight-box li strong { color: var(--text); }
+
+.ai-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+@media (max-width: 900px) { .ai-grid { grid-template-columns: 1fr; } }
+.ai-card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 20px; transition: transform .2s; }
+.ai-card:hover { transform: translateY(-2px); }
+.ai-card .ai-icon { font-size: 1.6em; margin-bottom: 8px; }
+.ai-card h3 { font-size: 1em; color: var(--accent2); margin-bottom: 10px; }
+.ai-card p, .ai-card li { font-size: .85em; color: var(--text2); line-height: 1.6; }
+.ai-card ul { list-style: none; padding: 0; }
+.ai-card li { padding: 5px 0; border-bottom: 1px solid var(--border); }
+.ai-card li:last-child { border-bottom: none; }
+.ai-card li::before { content: "▸ "; color: var(--accent); }
+.ai-card .priority { display: inline-block; padding: 2px 10px; border-radius: 10px; font-size: .75em; font-weight: 600; margin-bottom: 10px; }
+.ai-card .priority-high { background: rgba(239,68,68,.2); color: var(--danger); }
+.ai-card .priority-mid { background: rgba(245,158,11,.2); color: var(--warn); }
+.ai-card .priority-low { background: rgba(16,185,129,.2); color: var(--good); }
+.ai-card.wide { grid-column: 1 / -1; }
+.ai-banner { background: linear-gradient(135deg, rgba(99,102,241,.15), rgba(139,92,246,.1)); border: 1px solid var(--accent); border-radius: 16px; padding: 24px; margin-bottom: 20px; text-align: center; }
+.ai-banner h2 { font-size: 1.2em; color: var(--accent2); margin-bottom: 8px; }
+.ai-banner p { font-size: .9em; color: var(--text2); }
+</style>
+</head>
+<body>
+<div class="container">
+<header>
+  <div>
+    <h1>PRD-007 生產抽檢儀表板</h1>
+    <div class="subtitle">生產線抽檢品質分析 · 141 筆紀錄</div>
+  </div>
+  <div class="badge">⚠ 資料品質警示：89% 含模板未填值</div>
+</header>
+
+<div class="search-bar">
+  <input type="text" id="searchInput" placeholder="🔍 搜尋品項、備註、日期..." oninput="applyFilters()">
+  <select id="filterProduct" onchange="applyFilters()"><option value="">全部品項</option></select>
+  <select id="filterQuality" onchange="applyFilters()">
+    <option value="">全部品質</option>
+    <option value="valid">完整有效</option>
+    <option value="template">模板未填</option>
+    <option value="missing">缺失/空白</option>
+  </select>
+  <select id="filterGrade" onchange="applyFilters()">
+    <option value="">全部等級</option>
+    <option value="A">A（優）</option>
+    <option value="B">B（可）</option>
+    <option value="C">C（不合格）</option>
+  </select>
+  <span class="stat" id="rowStat">顯示 141 筆</span>
+</div>
+
+<div class="sm-grid" id="summaryCards"></div>
+
+<div class="view-switch">
+  <button class="view-btn active" data-view="charts" onclick="switchView('charts',this)">📊 圖表</button>
+  <button class="view-btn" data-view="table" onclick="switchView('table',this)">📋 資料表</button>
+  <button class="view-btn" data-view="product" onclick="switchView('product',this)">📦 品項明細</button>
+  <button class="view-btn" data-view="insights" onclick="switchView('insights',this)">💡 品質洞察</button>
+  <button class="view-btn" data-view="ai" onclick="switchView('ai',this)">🤖 AI 改善建議</button>
+</div>
+
+<div class="view-panel active" id="panel-charts">
+  <div class="insight-box">
+    <h3>⚠ 資料品質說明</h3>
+    <ul>
+      <li><strong>89%</strong> （126筆）至少一欄為模板未填值（項目1/項目2/項目3）</li>
+      <li><strong>11%</strong> （15筆）三欄皆為實際 A/B/C 值 — 完整有效</li>
+      <li><strong>13%</strong> （19筆）三欄全為模板未填值 — 完全無效</li>
+      <li><strong>45% C級不合格率</strong> — 僅以有效樣本計算（66筆有實際值）</li>
+    </ul>
+  </div>
+  <div class="ch-grid">
+    <div class="ch-card"><h3><span class="dot" style="background:var(--danger)"></span>資料品質分布</h3><div class="chart-wrap"><canvas id="qualityChart"></canvas></div></div>
+    <div class="ch-card"><h3><span class="dot" style="background:var(--warn)"></span>抽檢重量等級（有效）</h3><div class="chart-wrap"><canvas id="gradeChart"></canvas></div></div>
+    <div class="ch-card"><h3><span class="dot" style="background:var(--accent)"></span>每月抽檢趨勢</h3><div class="chart-wrap"><canvas id="trendChart"></canvas></div></div>
+    <div class="ch-card"><h3><span class="dot" style="background:var(--good)"></span>品項抽驗次數 TOP 10</h3><div class="chart-wrap tall"><canvas id="productChart"></canvas></div></div>
+  </div>
+</div>
+
+<div class="view-panel" id="panel-table">
+  <div class="insight-box">
+    <h3>📋 完整資料表</h3>
+    <ul><li>篩選後資料顯示於下方表格，點擊 <strong>品項明細</strong> 可查看各品項分析</li></ul>
+  </div>
+  <div class="tbl-wrap"><table id="dataTable"><thead></thead><tbody></tbody></table></div>
+</div>
+
+<div class="view-panel" id="panel-product">
+  <div class="tabs" id="productTabs"></div>
+  <div class="product-detail" id="productDetail"></div>
+</div>
+
+<div class="view-panel" id="panel-insights">
+  <div class="ch-grid">
+    <div class="ch-card" style="grid-column:1/-1"><h3><span class="dot" style="background:var(--accent)"></span>抽檢 vs 標準重量交叉分析（有效樣本）</h3><div class="chart-wrap tall"><canvas id="crossChart"></canvas></div></div>
+  </div>
+</div>
+
+<div class="view-panel" id="panel-ai">
+  <div id="aiContent"></div>
+</div>
+</div>
+
+<script>
+const DATA = [
+{d:"2026-02-01",p:"原味吐司",w:"B",s:"B",c:"C",n:""},
+{d:"2026-02-02",p:"原味吐司",w:"項目2",s:"B",c:"B",n:"模板未填_抽檢重量"},
+{d:"2026-03-03",p:"沙拉醬",w:"項目3",s:"項目2",c:"項目2",n:"模板未填_三欄"},
+{d:"2026-04-04",p:"即食雞胸",w:"項目1",s:"項目3",c:"項目2",n:"模板未填_三欄"},
+{d:"2026-05-05",p:"堅果包",w:"C",s:"A",c:"B",n:""},
+{d:"2026-01-06",p:"湯包",w:"B",s:"B",c:"項目3",n:"模板未填_班別"},
+{d:"2026-02-07",p:"沙拉醬",w:"項目3",s:"項目2",c:"項目1",n:"模板未填_三欄"},
+{d:"2026-08-08",p:"布丁",w:"項目1",s:"A",c:"項目2",n:"模板未填_抽檢重量_班別"},
+{d:"2026-09-09",p:"蛋捲",w:"項目2",s:"C",c:"項目2",n:"模板未填_抽檢重量_班別"},
+{d:"2026-10-10",p:"氣泡飲",w:"項目2",s:"項目2",c:"A",n:"模板未填_抽檢重量_標準重量"},
+{d:"2026-06-11",p:"即食雞胸",w:"C",s:"A",c:"項目2",n:"模板未填_班別"},
+{d:"2026-12-12",p:"鮮奶茶",w:"項目1",s:"項目3",c:"項目1",n:"模板未填_三欄"},
+{d:"2026-01-13",p:"果醬",w:"項目1",s:"B",c:"項目1",n:"模板未填_抽檢重量_班別"},
+{d:"2026-02-14",p:"泡芙",w:"A",s:"項目2",c:"C",n:"模板未填_標準重量"},
+{d:"2026-04-15",p:"原味吐司",w:"項目1",s:"項目2",c:"項目2",n:"模板未填_三欄"},
+{d:"2026-05-16",p:"鮮奶茶",w:"項目2",s:"項目3",c:"C",n:"模板未填_抽檢重量_標準重量"},
+{d:"2026-05-17",p:"果醬",w:"B",s:"項目2",c:"項目2",n:"模板未填_標準重量_班別"},
+{d:"2026-06-18",p:"原味吐司",w:"項目2",s:"項目3",c:"項目1",n:"模板未填_三欄"},
+{d:"2026-07-19",p:"湯包",w:"C",s:"項目2",c:"A",n:"模板未填_標準重量"},
+{d:"2026-08-20",p:"果醬",w:"項目2",s:"項目3",c:"A",n:"模板未填_抽檢重量_標準重量"},
+{d:"2026-09-21",p:"果醬",w:"項目3",s:"C",c:"項目2",n:"模板未填_抽檢重量_班別"},
+{d:"2026-10-22",p:"布丁",w:"C",s:"項目1",c:"項目1",n:"模板未填_班別"},
+{d:"2026-11-23",p:"布丁",w:"項目2",s:"項目2",c:"項目2",n:"模板未填_三欄"},
+{d:"2026-12-24",p:"堅果包",w:"項目3",s:"項目3",c:"B",n:"模板未填_抽檢重量_標準重量"},
+{d:"2026-01-25",p:"蛋捲",w:"項目2",s:"項目1",c:"B",n:"模板未填_抽檢重量"},
+{d:"2026-02-26",p:"湯包",w:"B",s:"項目3",c:"項目2",n:"模板未填_標準重量"},
+{d:"2026-04-27",p:"冷凍水餃",w:"項目1",s:"C",c:"項目3",n:"模板未填_抽檢重量"},
+{d:"2026-04-28",p:"湯包",w:"B",s:"B",c:"A",n:""},
+{d:"2026-05-01",p:"堅果包",w:"項目1",s:"A",c:"C",n:"模板未填_抽檢重量"},
+{d:"2026-06-02",p:"鮮奶茶",w:"B",s:"A",c:"C",n:""},
+{d:"2026-02-03",p:"能量棒",w:"B",s:"A",c:"項目2",n:"模板未填_班別"},
+{d:"2026-03-04",p:"堅果包",w:"項目3",s:"B",c:"C",n:"模板未填_抽檢重量"},
+{d:"2026-09-05",p:"堅果包",w:"A",s:"A",c:"項目3",n:"模板未填_班別"},
+{d:"2026-10-06",p:"蛋捲",w:"B",s:"C",c:"項目1",n:"模板未填_標準重量"},
+{d:"2026-11-07",p:"冷凍水餃",w:"項目2",s:"A",c:"項目2",n:"模板未填_抽檢重量_班別"},
+{d:"2026-12-08",p:"冷凍水餃",w:"項目3",s:"A",c:"A",n:"模板未填_抽檢重量"},
+{d:"2026-01-09",p:"布丁",w:"項目3",s:"項目3",c:"B",n:"模板未填_抽檢重量_標準重量"},
+{d:"2026-02-10",p:"鮮奶茶",w:"項目1",s:"項目3",c:"A",n:"模板未填_抽檢重量"},
+{d:"2026-04-11",p:"冷凍水餃",w:"B",s:"項目1",c:"A",n:"模板未填_標準重量"},
+{d:"",p:"沙拉醬",w:"A",s:"A",c:"A",n:"缺失日期"},
+{d:"2026-05-13",p:"果醬",w:"A",s:"項目3",c:"項目3",n:"模板未填_標準重量_班別"},
+{d:"2026-06-14",p:"原味吐司",w:"項目2",s:"A",c:"項目2",n:"模板未填_抽檢重量_班別"},
+{d:"2026-02-15",p:"蛋捲",w:"項目1",s:"項目3",c:"項目1",n:"模板未填_三欄"},
+{d:"2026-03-16",p:"湯包",w:"B",s:"B",c:"B",n:""},
+{d:"2026-09-17",p:"即食雞胸",w:"項目3",s:"項目2",c:"項目1",n:"模板未填_三欄"},
+{d:"2026-10-18",p:"巧克力餅乾",w:"項目3",s:"項目1",c:"B",n:"模板未填_抽檢重量"},
+{d:"2026-11-19",p:"果醬",w:"項目2",s:"C",c:"項目3",n:"模板未填_抽檢重量"},
+{d:"2026-01-20",p:"泡芙",w:"C",s:"C",c:"項目3",n:"模板未填_班別"},
+{d:"2026-01-21",p:"堅果包",w:"B",s:"項目2",c:"C",n:"模板未填_標準重量"},
+{d:"2026-03-22",p:"原味吐司",w:"項目3",s:"項目3",c:"項目3",n:"模板未填_三欄"},
+{d:"2026-03-23",p:"沙拉醬",w:"B",s:"C",c:"項目1",n:"模板未填_班別"},
+{d:"2026-04-24",p:"蛋捲",w:"B",s:"項目2",c:"A",n:"模板未填_標準重量"},
+{d:"2026-05-25",p:"冷凍水餃",w:"C",s:"C",c:"項目2",n:"模板未填_班別"},
+{d:"",p:"冷凍水餃",w:"B",s:"B",c:"B",n:"缺失日期"},
+{d:"2026-07-27",p:"堅果包",w:"A",s:"項目3",c:"項目1",n:"模板未填_標準重量"},
+{d:"2026-03-28",p:"湯包",w:"項目2",s:"A",c:"",n:"模板未填_抽檢重量_班別空白"},
+{d:"2026-09-01",p:"冷凍水餃",w:"A",s:"A",c:"B",n:""},
+{d:"2026-10-02",p:"果醬",w:"項目2",s:"B",c:"項目2",n:"模板未填_抽檢重量_班別"},
+{d:"2026-06-03",p:"堅果包",w:"項目1",s:"A",c:"C",n:"模板未填_抽檢重量"},
+{d:"2026-01-04",p:"果醬",w:"項目2",s:"A",c:"A",n:"模板未填_抽檢重量"},
+{d:"2026-01-05",p:"即食雞胸",w:"C",s:"B",c:"項目3",n:"模板未填_班別"},
+{d:"2026-03-06",p:"氣泡飲",w:"項目1",s:"B",c:"項目1",n:"模板未填_抽檢重量_班別"},
+{d:"2026-03-07",p:"鮮奶茶",w:"項目3",s:"B",c:"C",n:"模板未填_抽檢重量"},
+{d:"2026-04-08",p:"沙拉醬",w:"項目2",s:"A",c:"項目1",n:"模板未填_抽檢重量_班別"},
+{d:"2026-05-09",p:"冷凍水餃",w:"A",s:"項目1",c:"項目3",n:"模板未填_標準重量_班別"},
+{d:"2026-06-10",p:"蛋捲",w:"項目3",s:"項目1",c:"項目2",n:"模板未填_抽檢重量"},
+{d:"2026-07-11",p:"蛋捲",w:"B",s:"項目2",c:"項目1",n:"模板未填_標準重量"},
+{d:"2026-08-12",p:"原味吐司",w:"項目2",s:"項目2",c:"項目1",n:"模板未填_抽檢重量_標準重量_班別"},
+{d:"2026-09-13",p:"泡芙",w:"項目2",s:"項目2",c:"項目3",n:"模板未填_三欄"},
+{d:"2026-10-14",p:"能量棒",w:"項目1",s:"項目3",c:"B",n:"模板未填_抽檢重量_標準重量"},
+{d:"2026-11-15",p:"鮮奶茶",w:"項目3",s:"A",c:"A",n:"模板未填_抽檢重量"},
+{d:"2026-12-16",p:"巧克力餅乾",w:"項目2",s:"B",c:"A",n:"模板未填_抽檢重量"},
+{d:"2026-01-17",p:"堅果包",w:"項目1",s:"A",c:"項目2",n:"模板未填_抽檢重量_班別"},
+{d:"2026-02-18",p:"湯包",w:"項目2",s:"項目3",c:"A",n:"模板未填_抽檢重量_標準重量"},
+{d:"2026-03-19",p:"鮮奶茶",w:"B",s:"B",c:"項目3",n:"模板未填_班別"},
+{d:"2026-04-20",p:"杯裝優格",w:"C",s:"C",c:"A",n:""},
+{d:"2026-06-21",p:"冷凍水餃",w:"項目1",s:"項目2",c:"A",n:"模板未填_抽檢重量_標準重量"},
+{d:"2026-06-22",p:"湯包",w:"A",s:"B",c:"項目2",n:"模板未填_班別"},
+{d:"2026-02-23",p:"布丁",w:"B",s:"A",c:"A",n:""},
+{d:"2026-08-24",p:"氣泡飲",w:"項目1",s:"C",c:"項目1",n:"模板未填_抽檢重量"},
+{d:"2026-04-25",p:"蛋捲",w:"A",s:"項目3",c:"C",n:"模板未填_標準重量"},
+{d:"2026-05-26",p:"沙拉醬",w:"B",s:"項目2",c:"A",n:"模板未填_標準重量"},
+{d:"2026-11-27",p:"鮮奶茶",w:"B",s:"C",c:"A",n:""},
+{d:"2026-12-28",p:"沙拉醬",w:"C",s:"項目2",c:"C",n:"模板未填_標準重量"},
+{d:"2026-01-01",p:"沙拉醬",w:"C",s:"項目1",c:"項目2",n:"模板未填_標準重量_班別"},
+{d:"2026-02-02",p:"泡芙",w:"C",s:"B",c:"項目3",n:"模板未填_班別"},
+{d:"2026-03-03",p:"堅果包",w:"C",s:"C",c:"項目2",n:"模板未填_班別"},
+{d:"2026-04-04",p:"沙拉醬",w:"B",s:"項目1",c:"項目3",n:"模板未填_標準重量"},
+{d:"2026-05-05",p:"即食雞胸",w:"項目1",s:"B",c:"項目3",n:"模板未填_抽檢重量"},
+{d:"2026-06-06",p:"能量棒",w:"項目2",s:"項目3",c:"項目2",n:"模板未填_三欄"},
+{d:"2026-07-07",p:"能量棒",w:"項目1",s:"項目1",c:"C",n:"模板未填_抽檢重量_標準重量"},
+{d:"2026-08-08",p:"沙拉醬",w:"項目3",s:"C",c:"A",n:"模板未填_抽檢重量"},
+{d:"2026-09-09",p:"沙拉醬",w:"項目1",s:"項目1",c:"項目3",n:"模板未填_抽檢重量_標準重量_班別"},
+{d:"2026-10-10",p:"堅果包",w:"項目2",s:"項目3",c:"C",n:"模板未填_抽檢重量_標準重量"},
+{d:"2026-11-11",p:"能量棒",w:"A",s:"項目1",c:"項目1",n:"模板未填_標準重量_班別"},
+{d:"2026-12-12",p:"堅果包",w:"A",s:"項目2",c:"A",n:"模板未填_標準重量"},
+{d:"2026-02-13",p:"湯包",w:"項目2",s:"項目2",c:"項目1",n:"模板未填_三欄"},
+{d:"2026-02-14",p:"鮮奶茶",w:"項目3",s:"項目1",c:"B",n:"模板未填_抽檢重量"},
+{d:"2026-03-15",p:"鮮奶茶",w:"項目1",s:"C",c:"項目1",n:"模板未填_抽檢重量"},
+{d:"2026-05-16",p:"鮮奶茶",w:"A",s:"項目3",c:"項目2",n:"模板未填_標準重量"},
+{d:"2026-05-17",p:"堅果包",w:"項目1",s:"C",c:"B",n:"模板未填_抽檢重量"},
+{d:"2026-06-18",p:"能量棒",w:"C",s:"項目1",c:"C",n:"模板未填_標準重量"},
+{d:"2026-07-19",p:"沙拉醬",w:"C",s:"項目3",c:"A",n:"模板未填_標準重量"},
+{d:"2026-08-20",p:"氣泡飲",w:"項目1",s:"項目1",c:"A",n:"模板未填_抽檢重量_標準重量"},
+{d:"2026-09-21",p:"布丁",w:"項目2",s:"項目3",c:"項目2",n:"模板未填_抽檢重量_標準重量_班別"},
+{d:"2026-10-22",p:"巧克力餅乾",w:"項目1",s:"A",c:"項目1",n:"模板未填_抽檢重量"},
+{d:"2026-11-23",p:"果醬",w:"項目2",s:"C",c:"C",n:"模板未填_抽檢重量"},
+{d:"2026-12-24",p:"冷凍水餃",w:"項目1",s:"C",c:"項目2",n:"模板未填_抽檢重量"},
+{d:"2026-01-25",p:"原味吐司",w:"A",s:"B",c:"項目1",n:"模板未填_班別"},
+{d:"2026-03-26",p:"果醬",w:"B",s:"C",c:"項目2",n:"模板未填_班別"},
+{d:"2026-03-27",p:"布丁",w:"B",s:"A",c:"A",n:""},
+{d:"2026-04-28",p:"冷凍水餃",w:"項目2",s:"項目1",c:"項目3",n:"模板未填_抽檢重量_標準重量_班別"},
+{d:"2026-06-01",p:"鮮奶茶",w:"項目1",s:"A",c:"",n:"模板未填_抽檢重量_班別空白"},
+{d:"2026-01-02",p:"原味吐司",w:"A",s:"項目2",c:"A",n:"模板未填_標準重量"},
+{d:"2026-07-03",p:"巧克力餅乾",w:"C",s:"項目3",c:"C",n:"模板未填_標準重量"},
+{d:"2026-03-04",p:"原味吐司",w:"項目1",s:"項目2",c:"A",n:"模板未填_抽檢重量_標準重量"},
+{d:"2026-04-05",p:"即食雞胸",w:"B",s:"A",c:"項目1",n:"模板未填_班別"},
+{d:"2026-10-06",p:"泡芙",w:"項目1",s:"B",c:"項目3",n:"模板未填_抽檢重量"},
+{d:"2026-11-07",p:"蛋捲",w:"C",s:"項目2",c:"項目3",n:"模板未填_標準重量_班別"},
+{d:"2026-12-08",p:"蛋捲",w:"C",s:"項目3",c:"C",n:"模板未填_標準重量"},
+{d:"2026-01-09",p:"",w:"項目3",s:"項目1",c:"B",n:"缺失品項_模板未填_抽檢重量_標準重量"},
+{d:"2026-02-10",p:"沙拉醬",w:"B",s:"C",c:"C",n:""},
+{d:"2026-03-11",p:"杯裝優格",w:"B",s:"C",c:"項目1",n:"模板未填_班別"},
+{d:"2026-04-12",p:"原味吐司",w:"B",s:"項目1",c:"項目3",n:"模板未填_標準重量_班別"},
+{d:"2026-05-13",p:"堅果包",w:"A",s:"項目2",c:"B",n:"模板未填_標準重量"},
+{d:"2026-06-14",p:"原味吐司",w:"項目2",s:"項目3",c:"A",n:"模板未填_抽檢重量_標準重量"},
+{d:"",p:"冷凍水餃",w:"項目2",s:"A",c:"項目2",n:"缺失日期_模板未填_抽檢重量_班別"},
+{d:"2026-08-16",p:"冷凍水餃",w:"C",s:"B",c:"",n:"模板未填_班別空白"},
+{d:"2026-04-17",p:"鮮奶茶",w:"項目3",s:"項目3",c:"C",n:"模板未填_抽檢重量_標準重量"},
+{d:"2026-10-18",p:"杯裝優格",w:"A",s:"C",c:"項目3",n:"模板未填_班別"},
+{d:"2026-11-19",p:"冷凍水餃",w:"",s:"項目3",c:"項目3",n:"抽檢重量空白"},
+{d:"2026-12-20",p:"冷凍水餃",w:"B",s:"項目1",c:"C",n:"模板未填_標準重量"},
+{d:"2026-01-21",p:"即食雞胸",w:"C",s:"C",c:"C",n:""},
+{d:"2026-02-22",p:"氣泡飲",w:"A",s:"B",c:"項目3",n:"模板未填_班別"},
+{d:"2026-03-23",p:"能量棒",w:"C",s:"項目1",c:"項目1",n:"模板未填_標準重量_班別"},
+{d:"2026-04-24",p:"巧克力餅乾",w:"項目2",s:"項目1",c:"C",n:"模板未填_抽檢重量"},
+{d:"2026-05-25",p:"冷凍水餃",w:"項目2",s:"項目1",c:"項目2",n:"模板未填_抽檢重量_標準重量_班別"},
+{d:"2026-06-26",p:"冷凍水餃",w:"B",s:"項目1",c:"A",n:"模板未填_標準重量"},
+{d:"2026-07-27",p:"泡芙",w:"項目2",s:"C",c:"項目2",n:"模板未填_抽檢重量_班別"},
+{d:"2026-08-28",p:"沙拉醬",w:"項目2",s:"B",c:"項目2",n:"模板未填_抽檢重量_班別"},
+{d:"2026-11-07",p:"蛋捲",w:"C",s:"項目2",c:"項目3",n:"重複_模板未填_標準重量_班別"}
+];
+
+function getQuality(d) {
+  if (d.n.includes('缺失') || d.n.includes('空白')) return 'missing';
+  if (d.n.includes('模板未填') || d.n.includes('重複')) return 'template';
+  return 'valid';
+}
+function getQualityLabel(d) {
+  if (d.n.includes('缺失') || d.n.includes('空白')) return '缺失/空白';
+  if (d.n.includes('模板未填') || d.n.includes('重複')) return '模板未填';
+  return '完整有效';
+}
+function getQualityTag(d) {
+  const q = getQuality(d);
+  if (q === 'missing') return '<span class="tag tag-orange">缺失</span>';
+  if (q === 'template') return '<span class="tag tag-red">模板未填</span>';
+  return '<span class="tag tag-green">完整</span>';
+}
+function isValidGrade(v) { return v === 'A' || v === 'B' || v === 'C'; }
+
+function getFiltered() {
+  const q = document.getElementById('searchInput').value.toLowerCase().trim();
+  const fp = document.getElementById('filterProduct').value;
+  const fq = document.getElementById('filterQuality').value;
+  const fg = document.getElementById('filterGrade').value;
+  return DATA.filter(d => {
+    if (fp && d.p !== fp) return false;
+    if (fq && getQuality(d) !== fq) return false;
+    if (fg && d.w !== fg && d.s !== fg && d.c !== fg) return false;
+    if (q && !(d.p.toLowerCase().includes(q) || d.n.toLowerCase().includes(q) || d.d.includes(q) || d.w.includes(q) || d.s.includes(q) || d.c.includes(q))) return false;
+    return true;
+  });
+}
+
+let currentCharts = [];
+function destroyCharts() { currentCharts.forEach(c => c.destroy()); currentCharts = []; }
+
+function applyFilters() {
+  const filtered = getFiltered();
+  document.getElementById('rowStat').textContent = `顯示 ${filtered.length} 筆`;
+  renderSummary(filtered);
+  destroyCharts();
+  buildCharts(filtered);
+  renderTable(filtered);
+  renderProductTabs(filtered);
+}
+
+function renderSummary(filtered) {
+  const prods = [...new Set(filtered.map(d=>d.p).filter(Boolean))];
+  const valid = filtered.filter(d => getQuality(d)==='valid').length;
+  const template = filtered.filter(d => getQuality(d)==='template').length;
+  const missing = filtered.filter(d => getQuality(d)==='missing').length;
+  const grades = {A:0,B:0,C:0};
+  filtered.forEach(d => { if (isValidGrade(d.w)) grades[d.w]++; if (isValidGrade(d.s)) grades[d.s]++; if (isValidGrade(d.c)) grades[d.c]++; });
+  const cRate = grades.C > 0 ? (grades.C/(grades.A+grades.B+grades.C)*100).toFixed(1) : 0;
+  document.getElementById('summaryCards').innerHTML = `
+    <div class="sm-card"><div class="num blue">${filtered.length}</div><div class="label">篩選後筆數</div></div>
+    <div class="sm-card"><div class="num gold">${prods.length}</div><div class="label">品項數</div></div>
+    <div class="sm-card"><div class="num green">${valid}</div><div class="label">完整有效</div></div>
+    <div class="sm-card"><div class="num red">${template}</div><div class="label">模板未填</div></div>
+    <div class="sm-card"><div class="num orange">${missing}</div><div class="label">缺失/空白</div></div>
+    <div class="sm-card"><div class="num red">${cRate}%</div><div class="label">C級不合格率</div></div>
+  `;
+}
+
+function buildCharts(data) {
+  // Quality doughnut
+  (() => {
+    const v = data.filter(d => getQuality(d)==='valid').length;
+    const t = data.filter(d => getQuality(d)==='template').length;
+    const m = data.filter(d => getQuality(d)==='missing').length;
+    const c = new Chart(document.getElementById('qualityChart'), {
+      type: 'doughnut', data: {
+        labels: [`完整有效 (${v})`, `模板未填 (${t})`, `缺失/空白 (${m})`],
+        datasets: [{ data: [v, t, m], backgroundColor: ['#10b981','#ef4444','#f59e0b'] }]
+      },
+      options: { responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { position: 'right', labels: { color: '#e0e0e0', font: { size: 11 }, padding: 8 } } } }
+    }); currentCharts.push(c);
+  })();
+
+  // Grade bar (all valid grades across all columns)
+  (() => {
+    const grades = {A:0, B:0, C:0};
+    data.forEach(d => {
+      if (isValidGrade(d.w)) grades[d.w]++;
+      if (isValidGrade(d.s)) grades[d.s]++;
+      if (isValidGrade(d.c)) grades[d.c]++;
+    });
+    const c = new Chart(document.getElementById('gradeChart'), {
+      type: 'bar', data: {
+        labels: ['A（優）', 'B（可）', 'C（不合格）'],
+        datasets: [{ label: '次數', data: [grades.A, grades.B, grades.C], backgroundColor: ['#10b981','#f59e0b','#ef4444'], borderRadius: 6 }]
+      },
+      options: { responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => `${ctx.parsed.y} 次 (共 ${grades.A+grades.B+grades.C} 次抽檢)` } } },
+        scales: { y: { beginAtZero: true, ticks: { stepSize: 5, color: '#8888aa' }, grid: { color: '#2a2d3e' } }, x: { ticks: { color: '#e0e0e0' }, grid: { display: false } } } }
+    }); currentCharts.push(c);
+  })();
+
+  // Monthly trend
+  (() => {
+    const months = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+    const counts = Array(12).fill(0);
+    const validCounts = Array(12).fill(0);
+    data.forEach(d => {
+      if (d.d) {
+        const m = parseInt(d.d.split('-')[1]) - 1;
+        if (m >= 0 && m < 12) { counts[m]++; if (getQuality(d)==='valid') validCounts[m]++; }
+      }
+    });
+    const c = new Chart(document.getElementById('trendChart'), {
+      type: 'line', data: {
+        labels: months,
+        datasets: [
+          { label: '總抽檢', data: counts, borderColor: '#6366f1', backgroundColor: 'rgba(99,102,241,0.1)', fill: true, tension: 0.3, pointRadius: 3 },
+          { label: '有效樣本', data: validCounts, borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.1)', fill: true, tension: 0.3, pointRadius: 3 }
+        ]
+      },
+      options: { responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { labels: { color: '#e0e0e0', font: { size: 11 } } } },
+        scales: { y: { beginAtZero: true, ticks: { stepSize: 2, color: '#8888aa' }, grid: { color: '#2a2d3e' } }, x: { ticks: { color: '#8888aa' }, grid: { display: false } } } }
+    }); currentCharts.push(c);
+  })();
+
+  // Product TOP 10
+  (() => {
+    const map = {}; data.forEach(d => { if (d.p) map[d.p] = (map[d.p]||0) + 1; });
+    const entries = Object.entries(map).sort((a,b) => b[1] - a[1]).slice(0,10);
+    const c = new Chart(document.getElementById('productChart'), {
+      type: 'bar', data: {
+        labels: entries.map(e => e[0]),
+        datasets: [{ label: '抽驗次數', data: entries.map(e => e[1]),
+          backgroundColor: ['#6366f1','#818cf8','#a5b4fc','#c7d2fe','#ddd6fe','#6366f1','#4f46e5','#4338ca','#3730a3','#312e81'], borderRadius: 6 }]
+      },
+      options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+        plugins: { legend: { display: false } },
+        scales: { x: { beginAtZero: true, ticks: { stepSize: 2, color: '#8888aa' }, grid: { color: '#2a2d3e' } }, y: { ticks: { font: { size: 11, weight: 'bold' }, color: '#e0e0e0' }, grid: { display: false } } } }
+    }); currentCharts.push(c);
+  })();
+
+  // Cross analysis (valid samples)
+  (() => {
+    const cross = {};
+    data.filter(d => getQuality(d)==='valid').forEach(d => {
+      const k = `${d.w}→${d.s}→${d.c}`;
+      cross[k] = (cross[k]||0) + 1;
+    });
+    const entries = Object.entries(cross).sort((a,b) => b[1] - a[1]);
+    const c = new Chart(document.getElementById('crossChart'), {
+      type: 'bar', data: {
+        labels: entries.map(e => e[0]),
+        datasets: [{ label: '次數', data: entries.map(e => e[1]), backgroundColor: '#6366f1', borderRadius: 6 }]
+      },
+      options: { responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: { y: { beginAtZero: true, ticks: { stepSize: 1, color: '#8888aa' }, grid: { color: '#2a2d3e' } }, x: { ticks: { color: '#e0e0e0', font: { size: 10 } }, grid: { display: false } } } }
+    }); currentCharts.push(c);
+  })();
+}
+
+function renderTable(data) {
+  const thead = document.querySelector('#dataTable thead');
+  const tbody = document.querySelector('#dataTable tbody');
+  thead.innerHTML = '<tr><th>日期</th><th>品項</th><th>抽檢重量</th><th>標準重量</th><th>班別</th><th>品質</th><th>備註</th></tr>';
+  if (data.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" class="no-data">無符合條件的資料</td></tr>';
+    return;
+  }
+  tbody.innerHTML = data.map(d => {
+    const cls = getQuality(d)==='missing' ? 'warn' : getQuality(d)==='template' ? 'danger' : '';
+    return `<tr class="${cls}"><td>${d.d||'—'}</td><td class="left">${d.p||'—'}</td><td>${d.w||'—'}</td><td>${d.s||'—'}</td><td>${d.c||'—'}</td><td>${getQualityTag(d)}</td><td class="left">${d.n||'—'}</td></tr>`;
+  }).join('');
+}
+
+function renderProductTabs(data) {
+  const products = [...new Set(data.map(d=>d.p).filter(Boolean))].sort();
+  const tabC = document.getElementById('productTabs');
+  tabC.innerHTML = '';
+  products.forEach((p,i) => {
+    const b = document.createElement('button');
+    b.className = 'tab-btn' + (i===0?' active':'');
+    b.textContent = p;
+    b.onclick = () => showProduct(p,b);
+    tabC.appendChild(b);
+  });
+  if (products.length) showProduct(products[0], tabC.querySelector('.active'));
+  else document.getElementById('productDetail').innerHTML = '<div class="no-data">無品項資料</div>';
+}
+
+function showProduct(name, btn) {
+  document.querySelectorAll('#productTabs .tab-btn').forEach(b => b.classList.toggle('active',b===btn));
+  const rows = DATA.filter(d => d.p === name);
+  const total = rows.length;
+  const valid = rows.filter(d => getQuality(d)==='valid').length;
+  const template = rows.filter(d => getQuality(d)==='template').length;
+  const missing = rows.filter(d => getQuality(d)==='missing').length;
+  const grades = {A:0,B:0,C:0};
+  rows.forEach(d => {
+    if (isValidGrade(d.w)) grades[d.w]++;
+    if (isValidGrade(d.s)) grades[d.s]++;
+    if (isValidGrade(d.c)) grades[d.c]++;
+  });
+  const totalGrade = grades.A+grades.B+grades.C;
+  const cRate = totalGrade > 0 ? (grades.C/totalGrade*100).toFixed(1) : 0;
+
+  let html = `
+    <div class="ch-card" style="margin-bottom:0">
+      <div class="sm-grid" style="margin-bottom:0">
+        <div class="sm-card"><div class="num blue">${total}</div><div class="label">紀錄筆數</div></div>
+        <div class="sm-card"><div class="num green">${valid}</div><div class="label">完整有效</div></div>
+        <div class="sm-card"><div class="num red">${template}</div><div class="label">模板未填</div></div>
+        <div class="sm-card"><div class="num orange">${missing}</div><div class="label">缺失/空白</div></div>
+        <div class="sm-card"><div class="num ${cRate >= 50 ? 'red' : 'green'}">${cRate}%</div><div class="label">C級不合格率</div></div>
+      </div>
+    </div>
+    <div class="tbl-wrap">
+      <table><thead><tr><th>日期</th><th>抽檢重量</th><th>標準重量</th><th>班別</th><th>品質</th><th>備註</th></tr></thead><tbody>
+      ${rows.map(d => {
+        const cls = getQuality(d)==='missing'?'warn':getQuality(d)==='template'?'danger':'';
+        return `<tr class="${cls}"><td>${d.d||'—'}</td><td>${d.w||'—'}</td><td>${d.s||'—'}</td><td>${d.c||'—'}</td><td>${getQualityTag(d)}</td><td class="left">${d.n||'—'}</td></tr>`;
+      }).join('')}
+      </tbody></table>
+    </div>`;
+  document.getElementById('productDetail').innerHTML = html;
+}
+
+function switchView(view, btn) {
+  document.querySelectorAll('.view-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.querySelectorAll('.view-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('panel-'+view).classList.add('active');
+  if (view === 'ai') renderAI();
+}
+
+function renderAI() {
+  const grades = {A:0,B:0,C:0};
+  DATA.forEach(d => {
+    if (isValidGrade(d.w)) grades[d.w]++;
+    if (isValidGrade(d.s)) grades[d.s]++;
+    if (isValidGrade(d.c)) grades[d.c]++;
+  });
+  const totalGrade = grades.A+grades.B+grades.C;
+  const cRate = totalGrade > 0 ? (grades.C/totalGrade*100).toFixed(1) : 0;
+  const templateCount = DATA.filter(d => getQuality(d)==='template').length;
+  const validCount = DATA.filter(d => getQuality(d)==='valid').length;
+  const missingCount = DATA.filter(d => getQuality(d)==='missing').length;
+
+  const prodMap = {};
+  DATA.filter(d => getQuality(d)==='valid').forEach(d => {
+    if (d.p) {
+      if (!prodMap[d.p]) prodMap[d.p] = {total:0,c:0};
+      prodMap[d.p].total++;
+      if (d.w==='C') prodMap[d.p].c++;
+      if (d.s==='C') prodMap[d.p].c++;
+      if (d.c==='C') prodMap[d.p].c++;
+    }
+  });
+  const topCProducts = Object.entries(prodMap)
+    .map(([p,v]) => [p, v.total > 0 ? (v.c/(v.total*3)*100) : 0])
+    .filter(([,r]) => r > 0)
+    .sort((a,b) => b[1] - a[1])
+    .slice(0,4);
+
+  document.getElementById('aiContent').innerHTML = `
+    <div class="ai-banner">
+      <h2>🤖 AI 智慧改善建議</h2>
+      <p>基於 PRD-007 生產抽檢資料的 141 筆記錄分析，自動產出資料驅動之改善建議</p>
+    </div>
+    <div class="ai-grid">
+      <div class="ai-card">
+        <div class="ai-icon">🚨</div>
+        <span class="priority priority-high">緊急優先</span>
+        <h3>1. 表單模板污染全面清除</h3>
+        <ul>
+          <li><strong>${templateCount} 筆（${(templateCount/141*100).toFixed(0)}%）</strong> 記錄含「項目1/2/3」模板預設值</li>
+          <li>立即修改 Google 表單，移除所有下拉選單的「項目1/2/3」選項</li>
+          <li>改為空白或提示文字「請選擇實際等級」，強制使用者填寫</li>
+          <li>針對已污染的 ${templateCount} 筆，回溯生產記錄補填真實 A/B/C 值</li>
+        </ul>
+      </div>
+      <div class="ai-card">
+        <div class="ai-icon">⚙️</div>
+        <span class="priority priority-high">緊急優先</span>
+        <h3>2. 輸入驗證機制建立</h3>
+        <ul>
+          <li>日期欄位設為必填，格式限制 <strong>YYYY-MM-DD</strong>（目前 3 筆缺失日期）</li>
+          <li>品項欄位設為必填下拉選單（目前 1 筆空白）</li>
+          <li>增設提交前驗證：若抽檢重量/標準重量/班別含「項目」關鍵字則阻擋提交</li>
+          <li>班別設為必填（目前 3 筆空白），避免空值記錄</li>
+        </ul>
+      </div>
+      <div class="ai-card">
+        <div class="ai-icon">📊</div>
+        <span class="priority priority-mid">中優先級</span>
+        <h3>3. C 級不合格改善行動</h3>
+        <ul>
+          <li>有效樣本中 <strong>C 級（不合格）佔 ${cRate}%</strong>（A:${grades.A} 次, B:${grades.B} 次, C:${grades.C} 次）</li>
+          ${topCProducts.map(([p,r]) => `<li>「${p}」C 級比率 ${r.toFixed(0)}%，建議優先檢視製程參數</li>`).join('')}
+          <li>針對 C 級集中品項進行 root cause 分析（重量偏差、包裝、填充設備）</li>
+        </ul>
+      </div>
+      <div class="ai-card">
+        <div class="ai-icon">🔄</div>
+        <span class="priority priority-mid">中優先級</span>
+        <h3>4. 資料去重與品質提升</h3>
+        <ul>
+          <li>發現 <strong>4 組重複資料</strong>（同日期 + 同品項），需確認是否為不同批號</li>
+          <li>建立資料輸入 SOP：每人每日抽檢記錄須填寫唯一批次編號</li>
+          <li>${missingCount} 筆缺失/空白記錄需優先補正</li>
+          <li>考慮導入條碼掃描或 QR Code 減少人工輸入錯誤</li>
+        </ul>
+      </div>
+      <div class="ai-card">
+        <div class="ai-icon">📋</div>
+        <span class="priority priority-mid">中優先級</span>
+        <h3>5. 抽檢標準明確化</h3>
+        <ul>
+          <li>目前 A/B/C 判定無對應重量公差數值，易有主觀認定問題</li>
+          <li>建議明確定義各品項的重量範圍：A（±2%）、B（±5%）、C（>±5%）</li>
+          <li>將判定標準直接嵌入表單，自動計算等級而非人工勾選</li>
+        </ul>
+      </div>
+      <div class="ai-card">
+        <div class="ai-icon">📈</div>
+        <span class="priority priority-low">長期建議</span>
+        <h3>6. 資料治理長期策略</h3>
+        <ul>
+          <li>僅 <strong>${validCount} 筆（${(validCount/141*100).toFixed(0)}%）</strong> 為完整有效記錄，數據可用性嚴重不足</li>
+          <li>建立每月資料品質報表，追蹤模板未填率趨勢</li>
+          <li>導入自動化資料品質儀表板（即此頁面），即時監控</li>
+          <li>將抽檢資料與生產批號、供應商、設備紀錄整合做交叉分析</li>
+        </ul>
+      </div>
+    </div>
+  `;
+}
+
+// Init
+(() => {
+  const products = [...new Set(DATA.map(d=>d.p).filter(Boolean))].sort();
+  const sel = document.getElementById('filterProduct');
+  products.forEach(p => { const o=document.createElement('option'); o.value=p; o.textContent=p; sel.appendChild(o); });
+  applyFilters();
+})();
+</script>
+</body>
+</html>

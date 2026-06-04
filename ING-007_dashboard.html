@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ING-007 供應鏈品質儀表板</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg: #0f1118; --card: #1a1d2e; --card2: #212538;
+  --accent: #6c5ce7; --accent2: #a29bfe; --danger: #fd5454; --warn: #ffa726; --good: #26de81;
+  --text: #e0e0e0; --text2: #8888aa; --border: #2a2d3e;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Segoe UI', 'Noto Sans TC', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+.container { max-width: 1440px; margin: 0 auto; padding: 24px; }
+
+/* Header */
+header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; margin-bottom: 28px; }
+header h1 { font-size: 1.6em; background: linear-gradient(135deg, var(--accent2), var(--accent)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+header .subtitle { color: var(--text2); font-size: .9em; }
+header .badge { background: var(--card2); padding: 6px 14px; border-radius: 20px; font-size: .8em; border: 1px solid var(--border); }
+
+/* Search bar */
+.search-bar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 24px; }
+.search-bar input { flex: 1; min-width: 200px; padding: 10px 16px; border: 1px solid var(--border); border-radius: 10px; background: var(--card); color: var(--text); font-size: .9em; outline: none; transition: border .2s; }
+.search-bar input:focus { border-color: var(--accent); }
+.search-bar input::placeholder { color: var(--text2); }
+.search-bar select { padding: 10px 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--card); color: var(--text); font-size: .85em; outline: none; cursor: pointer; }
+.search-bar select:focus { border-color: var(--accent); }
+.search-bar .stat { color: var(--text2); font-size: .85em; margin-left: auto; }
+
+/* Summary cards */
+.sm-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 28px; }
+.sm-card { padding: 18px; border-radius: 14px; text-align: center; background: var(--card); border: 1px solid var(--border); transition: transform .2s; }
+.sm-card:hover { transform: translateY(-2px); }
+.sm-card .num { font-size: 2em; font-weight: 800; }
+.sm-card .label { font-size: .82em; color: var(--text2); margin-top: 4px; }
+.sm-card .num.gold { color: #ffd700; }
+.sm-card .num.red { color: var(--danger); }
+.sm-card .num.green { color: var(--good); }
+.sm-card .num.blue { color: var(--accent2); }
+.sm-card .num.orange { color: var(--warn); }
+
+/* Chart grid */
+.ch-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px; }
+@media (max-width: 900px) { .ch-grid { grid-template-columns: 1fr; } }
+.ch-card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 20px; }
+.ch-card h3 { font-size: .95em; color: var(--text2); margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+.ch-card h3 .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.chart-wrap { position: relative; height: 280px; }
+.chart-wrap.tall { height: 340px; }
+
+/* Tabs */
+.tabs { display: flex; gap: 4px; margin-bottom: 14px; flex-wrap: wrap; }
+.tab-btn { padding: 8px 18px; border: 1px solid var(--border); border-radius: 8px; background: transparent; color: var(--text2); cursor: pointer; font-size: .85em; transition: all .2s; }
+.tab-btn:hover { border-color: var(--accent); color: var(--text); }
+.tab-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+/* Table */
+.tbl-wrap { overflow-x: auto; border-radius: 12px; border: 1px solid var(--border); }
+table { width: 100%; border-collapse: collapse; font-size: .85em; }
+th { background: var(--card2); color: var(--text2); font-weight: 600; padding: 10px 12px; text-align: center; white-space: nowrap; border-bottom: 1px solid var(--border); }
+td { padding: 8px 12px; text-align: center; border-bottom: 1px solid var(--border); white-space: nowrap; }
+td.left { text-align: left; }
+tr:hover { background: rgba(108,92,231,.08); }
+tr.danger { background: rgba(253,84,84,.1); }
+tr.danger:hover { background: rgba(253,84,84,.18); }
+tr.warn { background: rgba(255,167,38,.1); }
+tr.warn:hover { background: rgba(255,167,38,.18); }
+
+/* Tags */
+.tag { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: .75em; font-weight: 600; }
+.tag-red { background: rgba(253,84,84,.2); color: var(--danger); }
+.tag-orange { background: rgba(255,167,38,.2); color: var(--warn); }
+.tag-green { background: rgba(38,222,129,.2); color: var(--good); }
+.tag-purple { background: rgba(108,92,231,.2); color: var(--accent2); }
+
+/* View switcher */
+.view-switch { display: flex; gap: 6px; margin-bottom: 20px; }
+.view-btn { padding: 8px 20px; border: 1px solid var(--border); border-radius: 8px; background: transparent; color: var(--text2); cursor: pointer; font-size: .85em; transition: all .2s; }
+.view-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.view-btn:hover:not(.active) { border-color: var(--accent); }
+.view-panel { display: none; }
+.view-panel.active { display: block; }
+
+/* Supplier detail */
+.supplier-detail { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 700px) { .supplier-detail { grid-template-columns: 1fr; } }
+
+/* No results */
+.no-data { text-align: center; padding: 40px; color: var(--text2); font-size: .95em; }
+
+.ai-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+@media (max-width: 900px) { .ai-grid { grid-template-columns: 1fr; } }
+.ai-card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 20px; transition: transform .2s; }
+.ai-card:hover { transform: translateY(-2px); }
+.ai-card .ai-icon { font-size: 1.6em; margin-bottom: 8px; }
+.ai-card h3 { font-size: 1em; color: var(--accent2); margin-bottom: 10px; }
+.ai-card p, .ai-card li { font-size: .85em; color: var(--text2); line-height: 1.6; }
+.ai-card ul { list-style: none; padding: 0; }
+.ai-card li { padding: 5px 0; border-bottom: 1px solid var(--border); }
+.ai-card li:last-child { border-bottom: none; }
+.ai-card li::before { content: "▸ "; color: var(--accent); }
+.ai-card .priority { display: inline-block; padding: 2px 10px; border-radius: 10px; font-size: .75em; font-weight: 600; margin-bottom: 10px; }
+.ai-card .priority-high { background: rgba(253,84,84,.2); color: var(--danger); }
+.ai-card .priority-mid { background: rgba(255,167,38,.2); color: var(--warn); }
+.ai-card .priority-low { background: rgba(38,222,129,.2); color: var(--good); }
+.ai-card.wide { grid-column: 1 / -1; }
+.ai-banner { background: linear-gradient(135deg, rgba(108,92,231,.15), rgba(162,155,254,.1)); border: 1px solid var(--accent); border-radius: 16px; padding: 24px; margin-bottom: 20px; text-align: center; }
+.ai-banner h2 { font-size: 1.2em; color: var(--accent2); margin-bottom: 8px; }
+.ai-banner p { font-size: .9em; color: var(--text2); }
+</style>
+</head>
+<body>
+<div class="container">
+<header>
+  <div>
+    <h1>ING-007 供應鏈品質儀表板</h1>
+    <div class="subtitle">食材進貨品質異常分析 · 101 筆紀錄</div>
+  </div>
+  <div class="badge">最後更新 2026-06-04</div>
+</header>
+
+<div class="search-bar">
+  <input type="text" id="searchInput" placeholder="🔍 搜尋供應商、食材、異常類型..." oninput="applyFilters()">
+  <select id="filterSupplier" onchange="applyFilters()"><option value="">全部供應商</option></select>
+  <select id="filterAnomaly" onchange="applyFilters()"><option value="">全部異常類型</option></select>
+  <select id="filterRisk" onchange="applyFilters()">
+    <option value="">全部風險</option>
+    <option value="high">高風險 &gt; 100%</option>
+    <option value="mid">中風險 50~100%</option>
+    <option value="low">低風險 &lt; 50%</option>
+  </select>
+  <span class="stat" id="rowStat">顯示 101 筆</span>
+</div>
+
+<div class="sm-grid" id="summaryCards"></div>
+
+<div class="view-switch">
+  <button class="view-btn active" data-view="charts" onclick="switchView('charts',this)">📊 圖表</button>
+  <button class="view-btn" data-view="table" onclick="switchView('table',this)">📋 資料表</button>
+  <button class="view-btn" data-view="supplier" onclick="switchView('supplier',this)">🏭 供應商明細</button>
+  <button class="view-btn" data-view="ai" onclick="switchView('ai',this)">🤖 AI 改善建議</button>
+</div>
+
+<div class="view-panel active" id="panel-charts">
+  <div class="ch-grid">
+    <div class="ch-card"><h3><span class="dot" style="background:var(--accent2)"></span>供應商退貨率</h3><div class="chart-wrap"><canvas id="supplierChart"></canvas></div></div>
+    <div class="ch-card"><h3><span class="dot" style="background:var(--danger)"></span>異常類型分布</h3><div class="chart-wrap"><canvas id="anomalyChart"></canvas></div></div>
+    <div class="ch-card"><h3><span class="dot" style="background:var(--warn)"></span>食材退貨率 TOP 10</h3><div class="chart-wrap tall"><canvas id="ingredientChart"></canvas></div></div>
+    <div class="ch-card"><h3><span class="dot" style="background:var(--good)"></span>供應商異常雷達圖</h3><div class="chart-wrap tall"><canvas id="radarChart"></canvas></div></div>
+  </div>
+</div>
+
+<div class="view-panel" id="panel-table">
+  <div class="tbl-wrap"><table id="dataTable"><thead></thead><tbody></tbody></table></div>
+</div>
+
+<div class="view-panel" id="panel-supplier">
+  <div class="tabs" id="supplierTabs"></div>
+  <div class="supplier-detail" id="supplierDetail"></div>
+</div>
+
+<div class="view-panel" id="panel-ai">
+  <div id="aiContent"></div>
+</div>
+</div>
+
+<script>
+const DATA = [
+  {s:"長榮食材",i:"醬油",p:492,r:138,a:"異物"},{s:"大全農產",i:"白米",p:235,r:116,a:"標示錯誤"},{s:"長榮食材",i:"雞蛋",p:71,r:42,a:"封口不良"},{s:"大全農產",i:"雞胸肉",p:335,r:60,a:"封口不良"},{s:"長榮食材",i:"奶油",p:191,r:106,a:"重量不足"},{s:"海洋直送",i:"奶油",p:43,r:158,a:"變色"},{s:"海洋直送",i:"洋蔥",p:345,r:470,a:"溫度偏高"},{s:"綠源",i:"馬鈴薯",p:441,r:360,a:"變色"},{s:"海洋直送",i:"菇類",p:100,r:455,a:"封口不良"},{s:"豐收行",i:"白米",p:345,r:368,a:"標示錯誤"},{s:"長榮食材",i:"蝦仁",p:207,r:326,a:"溫度偏高"},{s:"綠源",i:"奶油",p:468,r:380,a:"變色"},{s:"大全農產",i:"醬油",p:132,r:195,a:"封口不良"},{s:"長榮食材",i:"雞胸肉",p:112,r:58,a:"破損"},{s:"豐收行",i:"起司",p:202,r:288,a:"重量不足"},{s:"鮮供應",i:"鮭魚",p:66,r:216,a:"標示錯誤"},{s:"益昌",i:"醬油",p:432,r:316,a:"變色"},{s:"益昌",i:"牛奶",p:57,r:27,a:"變色"},{s:"綠源",i:"洋蔥",p:269,r:64,a:"標示錯誤"},{s:"長榮食材",i:"奶油",p:329,r:51,a:"破損"},{s:"長榮食材",i:"番茄",p:378,r:289,a:"異物"},{s:"海洋直送",i:"雞蛋",p:333,r:430,a:"變色"},{s:"豐收行",i:"雞胸肉",p:239,r:124,a:"變色"},{s:"海洋直送",i:"菇類",p:202,r:246,a:"溫度偏高"},{s:"台農",i:"白米",p:273,r:461,a:"顏色異常"},{s:"台農",i:"紅蘿蔔",p:460,r:432,a:"溫度偏高"},{s:"鮮供應",i:"雞胸肉",p:415,r:298,a:"重量不足"},{s:"台農",i:"紅蘿蔔",p:216,r:130,a:"變色"},{s:"綠源",i:"雞胸肉",p:204,r:207,a:"溫度偏高"},{s:"海洋直送",i:"洋蔥",p:477,r:288,a:"破損"},{s:"台農",i:"馬鈴薯",p:0,r:493,a:"重量不足"},{s:"鮮供應",i:"",p:440,r:397,a:"異物"},{s:"台農",i:"豬絞肉",p:459,r:368,a:"重量不足"},{s:"豐收行",i:"高麗菜",p:332,r:124,a:"標示錯誤"},{s:"鮮供應",i:"番茄",p:94,r:126,a:"異物"},{s:"長榮食材",i:"馬鈴薯",p:106,r:60,a:"封口不良"},{s:"台農",i:"雞蛋",p:316,r:248,a:"顏色異常"},{s:"益昌",i:"牛奶",p:118,r:187,a:"顏色異常"},{s:"海洋直送",i:"醬油",p:45,r:336,a:"異物"},{s:"鮮供應",i:"菇類",p:245,r:474,a:"異物"},{s:"大全農產",i:"奶油",p:178,r:27,a:"重量不足"},{s:"綠源",i:"馬鈴薯",p:0,r:475,a:"異物"},{s:"綠源",i:"砂糖",p:74,r:111,a:"重量不足"},{s:"豐收行",i:"食用油",p:51,r:149,a:"溫度偏高"},{s:"大全農產",i:"奶油",p:128,r:443,a:"溫度偏高"},{s:"長榮食材",i:"砂糖",p:88,r:372,a:"溫度偏高"},{s:"鮮供應",i:"高麗菜",p:4,r:311,a:"封口不良"},{s:"綠源",i:"番茄",p:115,r:22,a:"標示錯誤"},{s:"海洋直送",i:"食用油",p:158,r:354,a:"溫度偏高"},{s:"長榮食材",i:"番茄",p:241,r:57,a:"溫度偏高"},{s:"台農",i:"洋蔥",p:308,r:295,a:"重量不足"},{s:"鮮供應",i:"洋蔥",p:221,r:375,a:"異物"},{s:"台農",i:"麵粉",p:340,r:453,a:"破損"},{s:"綠源",i:"高麗菜",p:233,r:58,a:"標示錯誤"},{s:"海洋直送",i:"高麗菜",p:128,r:410,a:"異物"},{s:"台農",i:"白米",p:499,r:145,a:"溫度偏高"},{s:"大全農產",i:"牛奶",p:249,r:182,a:"異物"},{s:"豐收行",i:"鮭魚",p:2,r:174,a:"破損"},{s:"益昌",i:"番茄",p:192,r:282,a:"重量不足"},{s:"益昌",i:"馬鈴薯",p:277,r:277,a:"破損"},{s:"台農",i:"奶油",p:172,r:83,a:"顏色異常"},{s:"豐收行",i:"麵粉",p:138,r:438,a:"異物"},{s:"台農",i:"雞蛋",p:488,r:91,a:"重量不足"},{s:"豐收行",i:"鮭魚",p:239,r:292,a:"異物"},{s:"益昌",i:"麵粉",p:491,r:237,a:"重量不足"},{s:"台農",i:"紅蘿蔔",p:268,r:314,a:"溫度偏高"},{s:"益昌",i:"起司",p:192,r:455,a:"重量不足"},{s:"綠源",i:"菇類",p:113,r:473,a:"標示錯誤"},{s:"益昌",i:"食用油",p:451,r:139,a:"破損"},{s:"綠源",i:"豆腐",p:59,r:260,a:"破損"},{s:"海洋直送",i:"鮭魚",p:480,r:132,a:"溫度偏高"},{s:"綠源",i:"菇類",p:83,r:466,a:"破損"},{s:"大全農產",i:"醬油",p:206,r:350,a:"封口不良"},{s:"海洋直送",i:"紅蘿蔔",p:320,r:272,a:""},{s:"台農",i:"",p:194,r:253,a:"溫度偏高"},{s:"綠源",i:"奶油",p:203,r:72,a:"破損"},{s:"綠源",i:"起司",p:95,r:109,a:"標示錯誤"},{s:"綠源",i:"菇類",p:126,r:385,a:"標示錯誤"},{s:"台農",i:"蝦仁",p:313,r:279,a:"標示錯誤"},{s:"鮮供應",i:"蝦仁",p:59,r:259,a:"異物"},{s:"長榮食材",i:"醬油",p:211,r:26,a:"標示錯誤"},{s:"長榮食材",i:"豬絞肉",p:357,r:446,a:"重量不足"},{s:"綠源",i:"豆腐",p:465,r:243,a:"破損"},{s:"綠源",i:"奶油",p:317,r:178,a:"溫度偏高"},{s:"長榮食材",i:"雞胸肉",p:385,r:331,a:"破損"},{s:"鮮供應",i:"洋蔥",p:21,r:12,a:"溫度偏高"},{s:"大全農產",i:"起司",p:421,r:101,a:"封口不良"},{s:"大全農產",i:"牛奶",p:184,r:152,a:"顏色異常"},{s:"鮮供應",i:"奶油",p:115,r:84,a:"封口不良"},{s:"豐收行",i:"牛奶",p:468,r:145,a:"破損"},{s:"綠源",i:"醬油",p:373,r:81,a:"封口不良"},{s:"益昌",i:"雞蛋",p:34,r:67,a:""},{s:"鮮供應",i:"奶油",p:185,r:490,a:"封口不良"},{s:"益昌",i:"菇類",p:306,r:42,a:"異物"},{s:"綠源",i:"豆腐",p:176,r:199,a:"破損"},{s:"大全農產",i:"蝦仁",p:6,r:349,a:"破損"},{s:"大全農產",i:"醬油",p:16,r:47,a:"顏色異常"},{s:"鮮供應",i:"高麗菜",p:62,r:276,a:"溫度偏高"},{s:"豐收行",i:"雞胸肉",p:227,r:106,a:"變色"},{s:"台農",i:"高麗菜",p:71,r:71,a:"顏色異常"},{s:"台農",i:"雞蛋",p:316,r:248,a:"顏色異常"}
+];
+
+const ANOMALY_ORDER = ['溫度偏高','破損','異物','重量不足','標示錯誤','封口不良','變色','顏色異常'];
+const ANOMALY_COLORS = {'溫度偏高':'#fd5454','破損':'#ab47bc','異物':'#42a5f5','重量不足':'#ffa726','標示錯誤':'#26de81','封口不良':'#26c6da','變色':'#7e57c2','顏色異常':'#fd5454'};
+const COLORS = ['#6c5ce7','#fd5454','#26de81','#ffa726','#ab47bc','#26c6da','#8d6e63','#78909c'];
+
+function rate(p,r) { return p > 0 ? (r/p*100) : 0; }
+function rStr(p,r) { return rate(p,r).toFixed(1) + '%'; }
+
+function getFiltered() {
+  const q = document.getElementById('searchInput').value.toLowerCase().trim();
+  const fs = document.getElementById('filterSupplier').value;
+  const fa = document.getElementById('filterAnomaly').value;
+  const fr = document.getElementById('filterRisk').value;
+  return DATA.filter(d => {
+    if (fs && d.s !== fs) return false;
+    if (fa && d.a !== fa) return false;
+    const r = rate(d.p,d.r);
+    if (fr === 'high' && r < 100) return false;
+    if (fr === 'mid' && (r < 50 || r >= 100)) return false;
+    if (fr === 'low' && r >= 50) return false;
+    if (q && !(d.s.toLowerCase().includes(q) || d.i.toLowerCase().includes(q) || (d.a||'').toLowerCase().includes(q))) return false;
+    return true;
+  });
+}
+
+let currentCharts = [];
+function destroyCharts() { currentCharts.forEach(c => c.destroy()); currentCharts = []; }
+
+function applyFilters() {
+  const filtered = getFiltered();
+  document.getElementById('rowStat').textContent = `顯示 ${filtered.length} 筆`;
+  renderSupplierSummary(filtered);
+  destroyCharts();
+  buildCharts(filtered);
+  renderTable(filtered);
+  renderSupplierTabs(filtered);
+}
+
+// Summary
+function renderSupplierSummary(filtered) {
+  const sups = [...new Set(filtered.map(d=>d.s).filter(Boolean))];
+  const ings = [...new Set(filtered.map(d=>d.i).filter(Boolean))];
+  let high = 0;
+  const supMap = {};
+  filtered.forEach(d => { if(d.s){supMap[d.s]=(supMap[d.s]||{p:0,r:0});supMap[d.s].p+=d.p;supMap[d.s].r+=d.r;} });
+  Object.values(supMap).forEach(v => { if(rate(v.p,v.r)>=100) high++; });
+  document.getElementById('summaryCards').innerHTML = `
+    <div class="sm-card"><div class="num blue">${filtered.length}</div><div class="label">篩選後筆數</div></div>
+    <div class="sm-card"><div class="num gold">${sups.length}</div><div class="label">供應商</div></div>
+    <div class="sm-card"><div class="num green">${ings.length}</div><div class="label">食材種類</div></div>
+    <div class="sm-card"><div class="num red">${high}</div><div class="label">高風險供應商</div></div>
+    <div class="sm-card"><div class="num orange">${ANOMALY_ORDER.length}</div><div class="label">異常類型</div></div>
+  `;
+}
+
+// Charts
+function buildCharts(data) {
+  // Supplier bar
+  (() => {
+    const map = {}; data.forEach(d => { if(!d.s) return; if(!map[d.s]) map[d.s]={p:0,r:0}; map[d.s].p+=d.p; map[d.s].r+=d.r; });
+    const entries = Object.entries(map).sort((a,b) => rate(b[1].p,b[1].r) - rate(a[1].p,a[1].r));
+    const c = new Chart(document.getElementById('supplierChart'), {
+      type: 'bar', data: {
+        labels: entries.map(e => e[0]),
+        datasets: [{ label: '退貨率 (%)', data: entries.map(e => rate(e[1].p, e[1].r)),
+          backgroundColor: entries.map(e => rate(e[1].p, e[1].r) >= 100 ? '#fd5454' : rate(e[1].p, e[1].r) >= 80 ? '#ffa726' : '#26de81'),
+          borderRadius: 6 }]
+      },
+      options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+        plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => `進貨: ${entries[ctx.dataIndex][1].p} | 退貨: ${entries[ctx.dataIndex][1].r} | 退貨率: ${ctx.parsed.x.toFixed(1)}%` } } },
+        scales: { x: { title: { display: true, text: '退貨率 (%)', color: '#8888aa' }, max: 250, grid: { color: '#2a2d3e' }, ticks: { color: '#8888aa' } }, y: { ticks: { font: { size: 12, weight: 'bold' }, color: '#e0e0e0' }, grid: { display: false } } } }
+    }); currentCharts.push(c);
+  })();
+
+  // Anomaly doughnut
+  (() => {
+    const map = {}; data.forEach(d => { if (d.a) { map[d.a] = (map[d.a]||0) + 1; } });
+    const entries = ANOMALY_ORDER.map(k => [k, map[k]||0]).filter(e => e[1]>0);
+    const c = new Chart(document.getElementById('anomalyChart'), {
+      type: 'doughnut', data: {
+        labels: entries.map(e => e[0]+' ('+e[1]+')'),
+        datasets: [{ data: entries.map(e => e[1]), backgroundColor: entries.map(e => ANOMALY_COLORS[e[0]]||'#6c5ce7') }]
+      },
+      options: { responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { position: 'right', labels: { color: '#e0e0e0', font: { size: 11 }, padding: 8 } } } }
+    }); currentCharts.push(c);
+  })();
+
+  // Ingredient TOP 10
+  (() => {
+    const map = {}; data.forEach(d => { if(!d.i) return; if(!map[d.i]) map[d.i]={p:0,r:0}; map[d.i].p+=d.p; map[d.i].r+=d.r; });
+    const entries = Object.entries(map).sort((a,b) => rate(b[1].p,b[1].r) - rate(a[1].p,a[1].r)).slice(0,10);
+    const c = new Chart(document.getElementById('ingredientChart'), {
+      type: 'bar', data: {
+        labels: entries.map(e => e[0]),
+        datasets: [{ label: '退貨率 (%)', data: entries.map(e => rate(e[1].p, e[1].r)),
+          backgroundColor: entries.map(e => rate(e[1].p, e[1].r) >= 150 ? '#fd5454' : rate(e[1].p, e[1].r) >= 100 ? '#ffa726' : '#26de81'), borderRadius: 6 }]
+      },
+      options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+        plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => `退貨率: ${ctx.parsed.x.toFixed(1)}%` } } },
+        scales: { x: { title: { display: true, text: '退貨率 (%)', color: '#8888aa' }, max: 350, grid: { color: '#2a2d3e' }, ticks: { color: '#8888aa' } }, y: { ticks: { font: { size: 11, weight: 'bold' }, color: '#e0e0e0' }, grid: { display: false } } } }
+    }); currentCharts.push(c);
+  })();
+
+  // Radar
+  (() => {
+    const suppliers = [...new Set(data.map(d=>d.s).filter(Boolean))];
+    const counts = {};
+    suppliers.forEach(s => { counts[s] = {}; ANOMALY_ORDER.forEach(a => counts[s][a]=0); });
+    data.forEach(d => { if (d.s && d.a && counts[d.s]) counts[d.s][d.a]++; });
+    const c = new Chart(document.getElementById('radarChart'), {
+      type: 'radar', data: {
+        labels: ANOMALY_ORDER,
+        datasets: suppliers.map((s,i) => ({
+          label: s, data: ANOMALY_ORDER.map(a => counts[s][a]),
+          borderColor: COLORS[i % COLORS.length],
+          backgroundColor: COLORS.map(c => c+'18')[i % COLORS.length],
+          pointRadius: 3, pointBackgroundColor: COLORS[i % COLORS.length]
+        }))
+      },
+      options: { responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { position: 'right', labels: { color: '#e0e0e0', font: { size: 10 }, boxWidth: 12, padding: 6 } } },
+        scales: { r: { beginAtZero: true, ticks: { stepSize: 2, font: { size: 9 }, color: '#8888aa', backdropColor: 'transparent' }, grid: { color: '#2a2d3e' }, pointLabels: { font: { size: 10, weight: 'bold' }, color: '#e0e0e0' } } } }
+    }); currentCharts.push(c);
+  })();
+}
+
+// Table
+function renderTable(data) {
+  const thead = document.querySelector('#dataTable thead');
+  const tbody = document.querySelector('#dataTable tbody');
+  if (data.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" class="no-data">無符合條件的資料</td></tr>';
+    thead.innerHTML = '<tr><th>供應商</th><th>食材</th><th>進貨</th><th>退貨</th><th>退貨率</th><th>異常類型</th></tr>';
+    return;
+  }
+  thead.innerHTML = '<tr><th>供應商</th><th>食材</th><th>進貨</th><th>退貨</th><th>退貨率</th><th>異常類型</th></tr>';
+  tbody.innerHTML = data.map(d => {
+    const r = rate(d.p,d.r);
+    const cls = r >= 100 ? 'danger' : r >= 50 ? 'warn' : '';
+    const tag = r >= 100 ? '<span class="tag tag-red">高風險</span>' : r >= 50 ? '<span class="tag tag-orange">中風險</span>' : '<span class="tag tag-green">低風險</span>';
+    return `<tr class="${cls}"><td class="left">${d.s||'—'}</td><td>${d.i||'—'}</td><td>${d.p||0}</td><td>${d.r}</td><td>${rStr(d.p,d.r)} ${tag}</td><td>${d.a||'—'}</td></tr>`;
+  }).join('');
+}
+
+// Supplier Tabs + Detail
+function renderSupplierTabs(data) {
+  const suppliers = [...new Set(data.map(d=>d.s).filter(Boolean))];
+  const tabC = document.getElementById('supplierTabs');
+  tabC.innerHTML = '';
+  suppliers.forEach((s,i) => {
+    const b = document.createElement('button');
+    b.className = 'tab-btn' + (i===0?' active':'');
+    b.textContent = s;
+    b.onclick = () => showSupplier(s,b);
+    tabC.appendChild(b);
+  });
+  if (suppliers.length) showSupplier(suppliers[0], tabC.querySelector('.active'));
+  else document.getElementById('supplierDetail').innerHTML = '<div class="no-data">無供應商資料</div>';
+}
+
+function showSupplier(name, btn) {
+  document.querySelectorAll('#supplierTabs .tab-btn').forEach(b => b.classList.toggle('active',b===btn));
+  const rows = DATA.filter(d => d.s === name);
+  const totalP = rows.reduce((s,d)=>s+d.p,0);
+  const totalR = rows.reduce((s,d)=>s+d.r,0);
+  const ingCount = [...new Set(rows.map(d=>d.i).filter(Boolean))].length;
+  const anomalyCounts = {};
+  rows.forEach(d => { if(d.a) anomalyCounts[d.a] = (anomalyCounts[d.a]||0)+1; });
+  const topAnomaly = Object.entries(anomalyCounts).sort((a,b)=>b[1]-a[1]).slice(0,3);
+
+  let html = `
+    <div class="ch-card" style="grid-column:1/-1;margin-bottom:0">
+      <div class="sm-grid" style="margin-bottom:0">
+        <div class="sm-card"><div class="num blue">${rows.length}</div><div class="label">記錄筆數</div></div>
+        <div class="sm-card"><div class="num green">${ingCount}</div><div class="label">食材種類</div></div>
+        <div class="sm-card"><div class="num ${rate(totalP,totalR)>=100?'red':'gold'}">${rStr(totalP,totalR)}</div><div class="label">整體退貨率</div></div>
+        <div class="sm-card"><div class="num orange">${topAnomaly.map(e=>e[0]).join('、')||'無'}</div><div class="label">主要異常</div></div>
+      </div>
+    </div>
+    <div class="tbl-wrap" style="grid-column:1/-1">
+      <table><thead><tr><th>食材</th><th>進貨</th><th>退貨</th><th>退貨率</th><th>異常類型</th></tr></thead><tbody>
+      ${rows.sort((a,b)=>rate(b.p,b.r)-rate(a.p,a.r)).map(d => {
+        const r = rate(d.p,d.r);
+        const cls = r>=100?'danger':r>=50?'warn':'';
+        return `<tr class="${cls}"><td class="left">${d.i||'—'}</td><td>${d.p||0}</td><td>${d.r}</td><td>${rStr(d.p,d.r)}</td><td>${d.a||'—'}</td></tr>`;
+      }).join('')}
+      </tbody></table>
+    </div>`;
+  document.getElementById('supplierDetail').innerHTML = html;
+}
+
+// View switcher
+function switchView(view, btn) {
+  document.querySelectorAll('.view-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.querySelectorAll('.view-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('panel-'+view).classList.add('active');
+  if (view === 'ai') renderAI();
+}
+
+function renderAI() {
+  const supData = {};
+  DATA.forEach(d => {
+    if (!d.s) return;
+    if (!supData[d.s]) supData[d.s] = {p:0,r:0,anos:{},ings:[]};
+    supData[d.s].p += d.p;
+    supData[d.s].r += d.r;
+    if (d.a) supData[d.s].anos[d.a] = (supData[d.s].anos[d.a]||0) + 1;
+    if (d.i && !supData[d.s].ings.includes(d.i)) supData[d.s].ings.push(d.i);
+  });
+
+  const supRanking = Object.entries(supData)
+    .map(([s,v]) => [s, v.p > 0 ? (v.r/v.p*100) : 0, v])
+    .sort((a,b) => b[1] - a[1]);
+
+  const topRisk = supRanking.filter(([,r]) => r >= 100);
+  const midRisk = supRanking.filter(([,r]) => r >= 80 && r < 100);
+
+  const anoTotal = {};
+  DATA.forEach(d => { if (d.a) anoTotal[d.a] = (anoTotal[d.a]||0) + 1; });
+  const topAno = Object.entries(anoTotal).sort((a,b) => b[1] - a[1]);
+
+  const ingMap = {};
+  DATA.forEach(d => { if (!d.i) return; if (!ingMap[d.i]) ingMap[d.i] = {p:0,r:0,sups:[]}; ingMap[d.i].p += d.p; ingMap[d.i].r += d.r; if (d.s && !ingMap[d.i].sups.includes(d.s)) ingMap[d.i].sups.push(d.s); });
+  const ingRanking = Object.entries(ingMap).map(([i,v]) => [i, v.p > 0 ? (v.r/v.p*100) : 0, v]).sort((a,b) => b[1] - a[1]);
+  const topIng = ingRanking.filter(([,r]) => r >= 150);
+
+  const totalSup = supRanking.length;
+  const highRiskCount = topRisk.length;
+
+  document.getElementById('aiContent').innerHTML = `
+    <div class="ai-banner">
+      <h2>🤖 AI 智慧改善建議</h2>
+      <p>基於 ING-007 供應鏈品質資料的 ${DATA.length} 筆記錄、${totalSup} 家供應商分析，自動產出供應鏈風險改善建議</p>
+    </div>
+    <div class="ai-grid">
+      <div class="ai-card">
+        <div class="ai-icon">🚨</div>
+        <span class="priority priority-high">緊急優先</span>
+        <h3>1. 高風險供應商管控</h3>
+        <ul>
+          ${topRisk.slice(0,4).map(([s,r]) => `<li><strong>${s}</strong> 退貨率 ${r.toFixed(1)}% — 建議立即暫停供貨或要求改善方案</li>`).join('')}
+          <li>${highRiskCount} 家供應商退貨率破百，應啟動 <strong>供應商改善計畫（SCAR）</strong></li>
+          ${midRisk.length > 0 ? `<li>${midRisk.map(([s,r]) => `${s}（${r.toFixed(1)}%）`).join('、')} 為邊際高風險，列入觀察名單</li>` : ''}
+        </ul>
+      </div>
+      <div class="ai-card">
+        <div class="ai-icon">🌡️</div>
+        <span class="priority priority-high">緊急優先</span>
+        <h3>2. 冷鏈物流強化</h3>
+        <ul>
+          <li><strong>「溫度偏高」</strong> 為最頻繁異常（${topAno[0]?.[1]||0} 次，佔 ${(topAno[0]?.[1]/DATA.length*100).toFixed(0)}%）</li>
+          <li>海洋直送、綠源的菇類和洋蔥頻繁出現溫度異常</li>
+          <li>建議：增設運輸溫度記錄器（data logger）、到貨即時紅外線測溫</li>
+          <li>溫度偏高易導致變色（${anoTotal['變色']||0} 次）與品質劣化連鎖效應</li>
+        </ul>
+      </div>
+      <div class="ai-card">
+        <div class="ai-icon">🥬</div>
+        <span class="priority priority-mid">中優先級</span>
+        <h3>3. 高風險食材專項管理</h3>
+        <ul>
+          ${topIng.slice(0,5).map(([i,r,v]) => `<li><strong>${i}</strong> 退貨率 ${r.toFixed(1)}%（${v.sups.join('、')}）</li>`).join('')}
+          <li>菇類橫跨多家供應商且退貨率高達 ${ingMap['菇類'] ? (ingMap['菇類'].r/ingMap['菇類'].p*100).toFixed(1) : 'N/A'}%，建議制定 <strong>菇類專項品管標準</strong></li>
+        </ul>
+      </div>
+      <div class="ai-card">
+        <div class="ai-icon">🔍</div>
+        <span class="priority priority-mid">中優先級</span>
+        <h3>4. 異常分類標準化</h3>
+        <ul>
+          <li>目前已將 ${ANOMALY_ORDER.length} 種異常用語統一分類（原 14 種寫法 → 8 種）</li>
+          <li>建議表單改為 <strong>下拉選單強制選擇</strong>，避免自由填寫造成的用語不一致</li>
+          <li>增設「其他（請說明）」選項作為例外處理，月結統計歸類</li>
+        </ul>
+      </div>
+      <div class="ai-card">
+        <div class="ai-icon">📋</div>
+        <span class="priority priority-mid">中優先級</span>
+        <h3>5. 極端值數據覆核</h3>
+        <ul>
+          <li>豐收行／鮭魚進貨 2 次退貨 174 次（退貨率 8,700%）</li>
+          <li>鮮供應／高麗菜進貨 4 次退貨 311 次（退貨率 7,775%）</li>
+          <li>大全農產／蝦仁進貨 6 次退貨 349 次（退貨率 5,817%）</li>
+          <li>以上 3 筆應 <strong>優先人工覆核</strong>，確認是否為輸入錯誤或單位認知偏差</li>
+        </ul>
+      </div>
+      <div class="ai-card">
+        <div class="ai-icon">🏆</div>
+        <span class="priority priority-low">長期建議</span>
+        <h3>6. 供應商評級制度建立</h3>
+        <ul>
+          <li>退貨率 &gt; 80% 列為 <strong>C 級供應商</strong>，要求提交書面改善報告</li>
+          <li>退貨率 &gt; 120% 列為 <strong>D 級</strong>，啟動新供應商評選替代方案</li>
+          <li>每季更新供應商風險矩陣圖（退貨率 × 交易量），納入採購決策</li>
+        </ul>
+      </div>
+    </div>
+  `;
+}
+
+// Init
+(() => {
+  const suppliers = [...new Set(DATA.map(d=>d.s).filter(Boolean))].sort();
+  const selSup = document.getElementById('filterSupplier');
+  const selAno = document.getElementById('filterAnomaly');
+  suppliers.forEach(s => { const o=document.createElement('option'); o.value=s; o.textContent=s; selSup.appendChild(o); });
+  ANOMALY_ORDER.forEach(a => { const o=document.createElement('option'); o.value=a; o.textContent=a; selAno.appendChild(o); });
+  applyFilters();
+})();
+</script>
+</body>
+</html>
